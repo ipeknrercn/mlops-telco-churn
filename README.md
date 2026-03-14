@@ -115,29 +115,45 @@ Akış:
 3. **Model Evaluation** – ROC-AUC, PR-AUC, Recall ve production eşikleri kontrolü
 4. **Model Promotion** – `--auto-promote` veya eşikler sağlanıyorsa Staging → Production
 
-Config’teki eşikler (`config/training_config.yaml`):
 
-- `production_min_roc_auc`, `production_min_pr_auc`, `production_min_recall`
-- Registry: `model_name: telco_churn_classifier` (API’de `MLFLOW_MODEL_NAME` ile override edilebilir)
+## Architecture
 
----
+\`\`\`
+┌─────────────────────────────────────────────────────┐
+│  DATA: telco_cleaned.csv (7043 customers)           │
+│  - Contract type, payment method, tenure, charges   │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  FEATURE ENGINEERING                                │
+│  - Hash crosses: contract×payment, service×contract │
+│  - Numerical features: tenure, charges              │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  MODEL TRAINING (XGBoost)                           │
+│  - MLflow experiment tracking                       │
+│  - Hyperparameter logging                           │
+│  - Model registration                               │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  MODEL REGISTRY (MLflow)                            │
+│  - Version control                                  │
+│  - Stage management (None/Staging/Production)       │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  API DEPLOYMENT (FastAPI + Docker)                  │
+│  - /predict: Real-time churn prediction             │
+│  - /health: Service health check                    │
+└─────────────────────────────────────────────────────┘
+\`\`\`
 
-## Model Promotion (Manuel)
-
-Staging’deki modeli Production’a taşımak için:
-
-```bash
-# En son Staging modelini Production’a al
-python scripts/promote_model.py --auto
-
-# Belirli versiyonu promote et
-python scripts/promote_model.py --version 3
-
-# Model adı (API cleaned model kullanıyorsa)
-python scripts/promote_model.py --auto --model-name telco_churn_classifier_cleaned
-```
-
-`MLFLOW_TRACKING_URI` ayarlı olmalıdır.
 
 ---
 
@@ -215,15 +231,6 @@ docker run -d -p 8000:8000 \
   churn-api:latest
 ```
 
-### Eğitim container (root Dockerfile)
-
-```bash
-docker build -t churn-train:latest .
-docker run --rm -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  --add-host=host.docker.internal:host-gateway \
-  churn-train:latest
-```
-
 ---
 
 ## CI/CD (GitHub Actions)
@@ -239,6 +246,53 @@ docker run --rm -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
 | **deploy** | Tüm aşamalar geçerse “READY TO DEPLOY” çıktısı |
 
 Smoke test: API’nin ayakta olması ve (CI’da MLflow ile eğitim yapıldığı için) `model_loaded: true` ile `/health` dönmesi.
+
+---
+
+##  CI/CD Pipeline
+
+The project includes a 5-stage automated pipeline triggered on every push to \`main\` branch:
+
+### Pipeline Stages
+
+\`\`\`
+┌─────────────────────────────────────────┐
+│  1.  LINT (Code Quality)                │
+│     - Flake8 style checking             │
+│     - Pylint quality score (≥6.0)       │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  2.  UNIT TESTS                         │
+│     - Feature engineering tests         │
+│     - 4 tests, <1 second execution      │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  3.  BUILD                              │
+│     - Training Docker image             │
+│     - API Docker image                  │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  4.  SMOKE TEST                         │
+│     - Start API container               │
+│     - Health endpoint verification      │
+│     - 200 OK response check             │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  5.  DEPLOY                             │
+│     - All stages passed                 │
+│     - Ready for production              │
+└─────────────────────────────────────────┘
+\`\`\`
+
+**Toplam Süre:** ~6-9 minutes
 
 ---
 
@@ -285,6 +339,22 @@ SMOKE_TEST_API_URL=http://localhost:8000 python tests/smoke_test.py
 Referans veri ile fit edilip, gelen veri ile karşılaştırma yapılabilir.
 
 ---
+
+##  Model Performance
+
+### Metrics (Test Set)
+
+| Metric | Value |
+|--------|-------|
+| **PR-AUC** | 0.6344 |
+| **ROC-AUC** | 0.8421 |
+| **Accuracy** | 79.3% |
+| **Precision** | 65.2% |
+| **Recall** | 54.8% |
+| **F1-Score** | 59.5% |
+
+---
+
 ### Not: Modelin mlflow/experiments sonuçları plots klasöründe yer almaktadır.
 
 ---
@@ -403,29 +473,44 @@ Flow:
 3. **Model Evaluation** – ROC-AUC, PR-AUC, Recall and production threshold control
 4. **Model Promotion** – `--auto-promote` or if the thresholds are met Staging → Production
 
-Thresholds in Config (`config/training_config.yaml`):
 
-- `production_min_roc_auc`, `production_min_pr_auc`, `production_min_recall`
-- Registry: `model_name: telco_churn_classifier` (It can be overridden with `MLFLOW_MODEL_NAME` in the API.)
+## Architecture
 
----
-
-## Model Promotion (Manually)
-
-To move the model from Staging to Production:
-
-```bash
-# Move the latest Staging model to Production
-python scripts/promote_model.py --auto
-
-# Promote a specific version
-python scripts/promote_model.py --version 3
-
-# Model name (if API uses cleaned model)
-python scripts/promote_model.py --auto --model-name telco_churn_classifier_cleaned
-```
-
-`MLFLOW_TRACKING_URI` must be set.
+\`\`\`
+┌─────────────────────────────────────────────────────┐
+│  DATA: telco_cleaned.csv (7043 customers)           │
+│  - Contract type, payment method, tenure, charges   │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  FEATURE ENGINEERING                                │
+│  - Hash crosses: contract×payment, service×contract │
+│  - Numerical features: tenure, charges              │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  MODEL TRAINING (XGBoost)                           │
+│  - MLflow experiment tracking                       │
+│  - Hyperparameter logging                           │
+│  - Model registration                               │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  MODEL REGISTRY (MLflow)                            │
+│  - Version control                                  │
+│  - Stage management (None/Staging/Production)       │
+└─────────────────┬───────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────┐
+│  API DEPLOYMENT (FastAPI + Docker)                  │
+│  - /predict: Real-time churn prediction             │
+│  - /health: Service health check                    │
+└─────────────────────────────────────────────────────┘
+\`\`\` in the API.)
 
 ---
 
@@ -503,15 +588,6 @@ docker run -d -p 8000:8000 \
   churn-api:latest
 ```
 
-### Train container (root Dockerfile)
-
-```bash
-docker build -t churn-train:latest .
-docker run --rm -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
-  --add-host=host.docker.internal:host-gateway \
-  churn-train:latest
-```
-
 ---
 
 ## CI/CD (GitHub Actions)
@@ -529,6 +605,53 @@ docker run --rm -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
 Smoke test: The API is up and running and (since training is done with MLflow in CI) it returns `model_loaded: true` and `/health`.
 
 ---
+
+## 🔄 CI/CD Pipeline
+
+The project includes a 5-stage automated pipeline triggered on every push to \`main\` branch:
+
+### Pipeline Stages
+
+\`\`\`
+┌─────────────────────────────────────────┐
+│  1.  LINT (Code Quality)                │
+│     - Flake8 style checking             │
+│     - Pylint quality score (≥6.0)       │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  2.  UNIT TESTS                         │
+│     - Feature engineering tests         │
+│     - 4 tests, <1 second execution      │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  3.  BUILD                              │
+│     - Training Docker image             │
+│     - API Docker image                  │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  4.  SMOKE TEST                         │
+│     - Start API container               │
+│     - Health endpoint verification      │
+│     - 200 OK response check             │
+└──────────────┬──────────────────────────┘
+               │ PASS 
+               ▼
+┌─────────────────────────────────────────┐
+│  5.  DEPLOY                             │
+│     - All stages passed                 │
+│     - Ready for production              │
+└─────────────────────────────────────────┘
+\`\`\`
+
+---
+
+**Total Duration:** ~6-9 minutes
 
 ## Configuration
 
@@ -573,5 +696,21 @@ SMOKE_TEST_API_URL=http://localhost:8000 python tests/smoke_test.py
 The data can be fitted with a reference data and compared with the incoming data.
 
 ---
+
+##  Model Performance
+
+### Metrics (Test Set)
+
+| Metric | Value |
+|--------|-------|
+| **PR-AUC** | 0.6344 |
+| **ROC-AUC** | 0.8421 |
+| **Accuracy** | 79.3% |
+| **Precision** | 65.2% |
+| **Recall** | 54.8% |
+| **F1-Score** | 59.5% |
+
+---
+
 ### Note: The model's mlflow/experiments results are located in the plots folder.
 
