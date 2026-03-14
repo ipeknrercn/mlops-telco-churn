@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 100
+exclude = .git,__pycache__,venv,.venv,env,tests,mlruns,mlartifacts
+# Ekstra whitespace/biçim uyarılarını da yoksay (projeyi hızlı stabilize etmek için)
+ignore = E203,W503,E501,F401,F811,F541,W291,W292,W293,W504,E226,E402,E128

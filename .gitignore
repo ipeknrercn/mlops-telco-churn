@@ -1,0 +1,39 @@
+@"
+# Model files (BÜYÜK DOSYALAR!)
+temp_models/
+*.pkl
+mlruns/
+mlartifacts/
+
+# MLflow database
+mlflow.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+*`$py.class
+.Python
+venv/
+env/
+.venv/
+.pytest_cache/
+
+# Data files (büyük CSV'ler)
+*.parquet
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
+
+# Logs
+*.log
+"@ | Out-File -FilePath .gitignore -Encoding utf8

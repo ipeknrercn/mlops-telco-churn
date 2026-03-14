@@ -1,0 +1,19 @@
+[MASTER]
+ignore=tests,venv,.venv,env
+
+[MESSAGES CONTROL]
+disable=C0111,C0103,R0903,W0212,C0301,R0913,R0914
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-args=10
+max-locals=20
+
+[REPORTS]
+output-format=text
+score=yes
+
+[BASIC]
+good-names=i,j,k,df,X,y,lr,dt,rf

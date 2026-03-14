@@ -1,0 +1,17 @@
+﻿__pycache__/
+*.py[cod]
+venv/
+.venv/
+mlruns/
+mlartifacts/
+tests/
+*.md
+temp_models/
+*.pkl
+mlflow.db
+.pytest_cache/
+plots/
+monitoring/
+pipelines/
+.git/
+.vscode/
