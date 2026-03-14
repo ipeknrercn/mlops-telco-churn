@@ -286,3 +286,292 @@ Referans veri ile fit edilip, gelen veri ile karşılaştırma yapılabilir.
 
 ---
 ### Not: Modelin mlflow/experiments sonuçları plots klasöründe yer almaktadır.
+
+---
+
+## EN
+
+An end-to-end MLOps project for predicting telecommunications customer churn. It provides a production-ready infrastructure featuring model training, the MLflow Model Registry, a Prefect pipeline, a FastAPI service, and CI/CD.
+
+---
+
+## Features
+
+- **Prefect pipeline**: Data preparation → Training → Evaluation → Model promotion (Staging → Production)
+- **MLflow**: Experiment tracking, model versioning, artifact and metric logging
+- **FastAPI service**: `/health`, `/model-info`, `/predict`, `/reload-model` endpoints
+- **Docker**: Separate images for training and the API
+- **CI/CD**: Lint → Unit test → Build → MLflow + train + smoke test → Deploy
+- **Monitoring**: Simple drift detection module based on PSI
+- **Configuration**: Thresholds, model parameters, and registry settings via YAML
+
+---
+
+## Projet Structure
+
+```
+mlops-telco-churn/
+├── api/
+│   ├── predict_service.py   # FastAPI Churn Prediction Service
+│   ├── test_api_real.py     # API test script
+│   └── Dockerfile           # API container
+├── config/
+│   ├── training_config.yaml # Pipeline train config (synthetic data)
+│   └── cleaned_data_config.yaml
+├── data/
+│   └── telco_cleaned.csv    # Cleaned data (optional)
+├── monitoring/
+│   └── drift_detector.py    # PSI based drift detection
+├── pipelines/
+│   └── prefect_pipeline.py  # Train → Evaluate → Promote flow
+├── scripts/
+│   ├── train_improved.py    # ChurnTrainer (MLflow + staging)
+│   ├── train_cleaned_data.py
+│   └── promote_model.py    # Staging → Production promotion
+├── tests/
+│   ├── smoke_test.py        # API deployment smoke test
+│   └── test_feature_engineering.py
+├── .github/workflows/
+│   └── ci-cd-pipeline.yml   # GitHub Actions CI/CD
+├── requirements.txt
+├── Dockerfile               # Train container (train_cleaned_data)
+└── README.md
+```
+
+---
+
+## Installation
+
+### Requirements
+- Python 3.10+
+- (Optional) Docker, MLflow tracking server
+
+### Virtual environment and dependencies
+
+```bash
+python -m venv .venv
+# Windows:  .venv\Scripts\activate
+# Linux/Mac: source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### MLflow (for local training and API)
+
+An MLflow tracking server is required for the API to load the production model.
+
+```bash
+# Terminal 1: MLflow server (serves artifacts)
+mlflow server \
+  --backend-store-uri sqlite:///mlflow.db \
+  --default-artifact-root ./mlflow_artifacts \
+  --serve-artifacts \
+  --host 0.0.0.0 \
+  -p 5000
+```
+
+Env variable:
+
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+```
+
+---
+
+## Pipeline (Prefect)
+
+One-touch training → evaluation → (conditional) promotion.
+
+```bash
+# With the default configuration, it enters Staging if the thresholds are exceeded.
+python -m pipelines.prefect_pipeline
+
+# Certain config
+python -m pipelines.prefect_pipeline --config config/training_config.yaml
+
+# Bypass thresholds and promote directly to Production.
+python -m pipelines.prefect_pipeline --auto-promote
+
+# For weekly cron (with Prefect Cloud/Server)
+python -m pipelines.prefect_pipeline --schedule
+```
+
+Flow:
+
+1. **Data Preparation** – (now dummy/synthetic)
+2. **Model Training** – Training with `ChurnTrainer`, logging to MLflow, recording to Staging.
+3. **Model Evaluation** – ROC-AUC, PR-AUC, Recall and production threshold control
+4. **Model Promotion** – `--auto-promote` or if the thresholds are met Staging → Production
+
+Thresholds in Config (`config/training_config.yaml`):
+
+- `production_min_roc_auc`, `production_min_pr_auc`, `production_min_recall`
+- Registry: `model_name: telco_churn_classifier` (It can be overridden with `MLFLOW_MODEL_NAME` in the API.)
+
+---
+
+## Model Promotion (Manually)
+
+To move the model from Staging to Production:
+
+```bash
+# Move the latest Staging model to Production
+python scripts/promote_model.py --auto
+
+# Promote a specific version
+python scripts/promote_model.py --version 3
+
+# Model name (if API uses cleaned model)
+python scripts/promote_model.py --auto --model-name telco_churn_classifier_cleaned
+```
+
+`MLFLOW_TRACKING_URI` must be set.
+
+---
+
+## Prediction API
+
+### Local run
+
+```bash
+export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+# Optional: different model name (default: telco_churn_classifier_cleaned)
+# export MLFLOW_MODEL_NAME=telco_churn_classifier
+
+uvicorn api.predict_service:app --reload --host 0.0.0.0 --port 8000
+```
+
+- **Swagger UI**: http://localhost:8000/docs  
+- **ReDoc**: http://localhost:8000/redoc  
+
+### Endpoints
+
+| Method | Endpoint        | Description                          |
+|--------|-----------------|-----------------------------------|
+| GET    | `/`             | Service information and endpoint list |
+| GET    | `/health`       | Health control, `model_loaded`, `model_version` |
+| GET    | `/model-info`   | Loaded production model information  |
+| POST   | `/predict`      | Churn prediction (probability, level of risk) |
+| POST   | `/reload-model` | Reload the model from MLflow.   |
+
+### Example predict request
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "TEST-001",
+    "gender": "Female",
+    "SeniorCitizen": 0,
+    "Partner": "Yes",
+    "Dependents": "No",
+    "tenure": 12,
+    "PhoneService": "Yes",
+    "MultipleLines": "No",
+    "InternetService": "Fiber optic",
+    "OnlineSecurity": "No",
+    "OnlineBackup": "Yes",
+    "DeviceProtection": "No",
+    "TechSupport": "No",
+    "StreamingTV": "Yes",
+    "StreamingMovies": "Yes",
+    "contract_type": "Month-to-month",
+    "PaperlessBilling": "Yes",
+    "payment_method": "Electronic check",
+    "MonthlyCharges": 89.85,
+    "TotalCharges": 1078.20,
+    "service_combo_id": "Fiber optic_Yes_Yes_Yes",
+    "geo_code": "G23"
+  }'
+```
+
+---
+
+## Docker
+
+### API container
+
+```bash
+# Build
+docker build -t churn-api:latest -f api/Dockerfile .
+
+# Run (If MLflow is on the host machine)
+docker run -d -p 8000:8000 \
+  -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  -e MLFLOW_MODEL_NAME=telco_churn_classifier \
+  --add-host=host.docker.internal:host-gateway \
+  churn-api:latest
+```
+
+### Train container (root Dockerfile)
+
+```bash
+docker build -t churn-train:latest .
+docker run --rm -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+  --add-host=host.docker.internal:host-gateway \
+  churn-train:latest
+```
+
+---
+
+## CI/CD (GitHub Actions)
+
+`.github/workflows/ci-cd-pipeline.yml` is triggered in push/PR.
+
+| Job         | Description |
+|------------|----------|
+| **lint**   | Flake8 + Pylint (`scripts/`, `api/`) |
+| **unit-test** | `pytest tests/test_feature_engineering.py` |
+| **build**  | Training + Build of API Docker image |
+| **smoke-test** | MLflow server + pipeline (train + promote) + API container + smoke test |
+| **deploy** | If all stages are completed, the output will be “READY TO DEPLOY”.|
+
+Smoke test: The API is up and running and (since training is done with MLflow in CI) it returns `model_loaded: true` and `/health`.
+
+---
+
+## Configuration
+
+### `config/training_config.yaml`
+
+- **experiment_name**: MLflow experiment name
+- **data**: Number of samples, test/val ratios, imbalance ratio
+- **model**: Algorithm (e.g., LogisticRegression), `max_iter`, `class_weight`
+- **thresholds**: Minimum ROC-AUC, PR-AUC, Recall for production
+- **registry**: `model_name`, staging/production automation
+
+### API Environment Variables
+
+- **MLFLOW_TRACKING_URI**: MLflow server address (required, for production models)
+- **MLFLOW_MODEL_NAME**: Model name in the Registry (default: `telco_churn_classifier_cleaned`)
+
+---
+
+## Tests
+
+```bash
+# Unit tests
+pytest tests/test_feature_engineering.py -v
+
+# Smoke test (The API is assumed to be running on localhost:8000.)
+python tests/smoke_test.py
+
+# Different URL
+SMOKE_TEST_API_URL=http://localhost:8000 python tests/smoke_test.py
+```
+
+---
+
+## Monitoring – Drift Detection
+
+`monitoring/drift_detector.py`: Simple drift detection using PSI (Population Stability Index).
+
+- PSI &lt; 0.1: No certain change  
+- 0.1 ≤ PSI &lt; 0.25: Medium change (watch)  
+- PSI ≥ 0.25: Strong change (alarm)
+
+The data can be fitted with a reference data and compared with the incoming data.
+
+---
+### Note: The model's mlflow/experiments results are located in the plots folder.
+
