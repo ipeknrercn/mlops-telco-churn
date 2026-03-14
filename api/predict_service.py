@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
+import os
 import mlflow
 from mlflow.tracking import MlflowClient
 import numpy as np
@@ -155,9 +156,9 @@ def load_production_model():
     try:
         logger.info(" Loading production model from MLflow...")
         
-        # MLflow client
+        # MLflow client; model name configurable for CI (e.g. telco_churn_classifier)
         client = MlflowClient()
-        model_name = "telco_churn_classifier_cleaned"  # Real Kaggle data model
+        model_name = os.environ.get("MLFLOW_MODEL_NAME", "telco_churn_classifier_cleaned")
         
         # Production modelini getir
         try:

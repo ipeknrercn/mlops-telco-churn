@@ -103,35 +103,48 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build API Container
+      - name: Install dependencies
         run: |
-          docker build -t ${{ env.DOCKER_IMAGE_API }}:latest -f api/Dockerfile .
-
-      - name: Start API Container
-        run: |
-          echo "Starting API container..."
-          docker run -d -p 8000:8000 --name api-test ${{ env.DOCKER_IMAGE_API }}:latest
-          sleep 15
-
-      - name: Install test dependencies
-        run: |
+          pip install -r requirements.txt
           pip install requests
 
-      - name: Run Smoke Test
+      - name: MLflow, train, build API, and smoke test
+        env:
+          MLFLOW_TRACKING_URI: "http://127.0.0.1:5000"
         run: |
+          set -e
+          echo "Starting MLflow tracking server..."
+          mlflow server \
+            --backend-store-uri sqlite:///mlflow.db \
+            --default-artifact-root ${{ github.workspace }}/mlflow_artifacts \
+            --serve-artifacts \
+            --host 0.0.0.0 \
+            -p 5000 &
+          sleep 10
+          echo "Running training pipeline (train -> evaluate -> promote)..."
+          python -m pipelines.prefect_pipeline --auto-promote
+          echo "Building API container..."
+          docker build -t ${{ env.DOCKER_IMAGE_API }}:latest -f api/Dockerfile .
+          echo "Starting API container with MLflow..."
+          docker run -d -p 8000:8000 --name api-test \
+            -e MLFLOW_TRACKING_URI=http://host.docker.internal:5000 \
+            -e MLFLOW_MODEL_NAME=telco_churn_classifier \
+            --add-host=host.docker.internal:host-gateway \
+            ${{ env.DOCKER_IMAGE_API }}:latest
+          sleep 15
           echo "Running Smoke Test..."
           python tests/smoke_test.py
 
       - name: Show container logs
         if: failure()
         run: |
-          docker logs api-test
+          docker logs api-test 2>&1 || true
 
       - name: Cleanup
         if: always()
         run: |
-          docker stop api-test || true
-          docker rm api-test || true
+          docker stop api-test 2>/dev/null || true
+          docker rm api-test 2>/dev/null || true
 
   deploy:
     name: Deploy
