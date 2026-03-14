@@ -651,7 +651,6 @@ The project includes a 5-stage automated pipeline triggered on every push to \`m
 
 ---
 
-**Total Duration:** ~6-9 minutes
 
 ## Configuration
 
