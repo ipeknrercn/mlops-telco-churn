@@ -117,7 +117,7 @@ Akış:
 
 
 ## Architecture
-
+```
 ┌─────────────────────────────────────────────────────┐
 │  DATA: telco_cleaned.csv (7043 customers)           │
 │  - Contract type, payment method, tenure, charges   │
@@ -151,7 +151,7 @@ Akış:
 │  - /predict: Real-time churn prediction             │
 │  - /health: Service health check                    │
 └─────────────────────────────────────────────────────┘
-
+```
 
 ---
 
@@ -253,6 +253,7 @@ The project includes a 5-stage automated pipeline triggered on every push to \`m
 
 ### Pipeline Stages
 
+```
 ┌─────────────────────────────────────────┐
 │  1.  LINT (Code Quality)                │
 │     - Flake8 style checking             │
@@ -287,8 +288,7 @@ The project includes a 5-stage automated pipeline triggered on every push to \`m
 │     - All stages passed                 │
 │     - Ready for production              │
 └─────────────────────────────────────────┘
-
-**Toplam Süre:** ~6-9 minutes
+```
 
 ---
 
@@ -472,6 +472,7 @@ Flow:
 
 ## Architecture
 
+```
 ┌─────────────────────────────────────────────────────┐
 │  DATA: telco_cleaned.csv (7043 customers)           │
 │  - Contract type, payment method, tenure, charges   │
@@ -505,6 +506,7 @@ Flow:
 │  - /predict: Real-time churn prediction             │
 │  - /health: Service health check                    │
 └─────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -606,6 +608,7 @@ The project includes a 5-stage automated pipeline triggered on every push to \`m
 
 ### Pipeline Stages
 
+```
 ┌─────────────────────────────────────────┐
 │  1.  LINT (Code Quality)                │
 │     - Flake8 style checking             │
@@ -640,6 +643,7 @@ The project includes a 5-stage automated pipeline triggered on every push to \`m
 │     - All stages passed                 │
 │     - Ready for production              │
 └─────────────────────────────────────────┘
+```
 
 ---
 
